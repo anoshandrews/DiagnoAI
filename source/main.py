@@ -31,7 +31,7 @@ if "chat_history" not in st.session_state:
 
 # streamlit page title
 
-st.title('⚕️ DignoAI')
+st.title('⚕️ DiagnoAI')
 
 for message in st.session_state.chat_history:
     with st.chat_message(message['role']):
@@ -49,7 +49,8 @@ if user_prompt:
     # providing instructions to pass to GROQ
 
     messages = [
-            {"role" : "system" , "content" : "You are a medical assistant, your task is to diagnose the patient's disease. Your task is to diagnose the symptoms and do nothing else, do not say anything about the disease, just ask questions further and further to get the most details until the point when the user cant list more symptos"},
+            {"role" : "system" ,
+             "content" : "You are a medical assistant specialized in symptom analysis. Your task is to collect the patient’s symptoms by asking structured and relevant questions. Start with general questions and then progressively ask more specific follow-ups to gather as much detail as possible. Do not provide any diagnosis or mention possible diseases. Continue asking questions until the user can no longer provide new symptoms or details. When the user indicates they have shared all relevant information, acknowledge that you have gathered enough data and prepare to analyze the symptoms. Stop collecting information only when the user explicitly states they have no more symptoms to share or when a natural stopping point is reached (e.g., responses become repetitive or indicate no further issues)."},
             *st.session_state.chat_history
             ]
 

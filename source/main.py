@@ -31,7 +31,7 @@ if "chat_history" not in st.session_state:
 
 # streamlit page title
 
-st.title('⚕️ DiagnoAI')
+st.title('⚕️ Diagno AI')
 
 for message in st.session_state.chat_history:
     with st.chat_message(message['role']):

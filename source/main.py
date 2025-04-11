@@ -1,6 +1,5 @@
 import os
 import json
-import whisper
 
 import streamlit as st
 from groq import Groq

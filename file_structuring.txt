@@ -1,0 +1,45 @@
+DiagnoAI/
+│
+├── app/
+│   ├── main.py               # FastAPI entry point
+│   ├── api/                  # Routes go here
+│   │   ├── v1/
+│   │   │   ├── endpoints/
+│   │   │   │   ├── chat.py           # Chatbot-related routes
+│   │   │   │   ├── diagnosis.py      # Symptom-based diagnosis (RF)
+│   │   │   │   ├── image_diagnosis.py# CNN/MedViT endpoints
+│   │   │   │   ├── report.py         # Generate report
+│   │   │   │   └── voice.py          # Voice input/output
+│   │   │   └── __init__.py
+│   ├── core/
+│   │   ├── config.py         # Settings/env loader
+│   │   ├── logging.py
+│   ├── models/               # ML & DL models
+│   │   ├── rf_model.py
+│   │   ├── cnn_model.py
+│   │   ├── llm_client.py     # OpenAI/Sesame wrapper
+│   │   └── vector_client.py  # VectorDB / FAISS / Chroma client
+│   ├── services/             # Business logic
+│   │   ├── diagnosis_service.py
+│   │   ├── report_service.py
+│   │   └── voice_service.py
+│   ├── utils/
+│   │   ├── helpers.py
+│   │   ├── preprocessing.py
+│   │   └── constants.py
+│   └── __init__.py
+│
+├── tests/                   # Unit tests
+│   ├── test_rf.py
+│   ├── test_cnn.py
+│   ├── test_chat.py
+│
+├── scripts/                 # Preprocessing, training etc.
+│   ├── train_rf.py
+│   ├── train_cnn.py
+│
+├── requirements.txt
+├── README.md
+├── .env                     # Secrets and env vars
+├── Dockerfile               # For deployment
+└── uvicorn_start.sh         # Uvicorn launch script

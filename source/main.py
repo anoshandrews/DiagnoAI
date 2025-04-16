@@ -1,8 +1,14 @@
 import os
 import json
+import torch
+from x_ray_prompt import prompts
 
 import streamlit as st
 from groq import Groq
+from PIL import Image
+import torchvision.transforms as transforms
+
+from transformers import AutoImageProcessor, AutoModelForImageClassification
 
 #streamlit page configuration
 
@@ -23,10 +29,45 @@ os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 
 client = Groq()
 
-#initializing the chat history if streamlit session state is not available yet
+model_id = 'khengkok/vit-medical'
 
+processor = AutoImageProcessor.from_pretrained(model_id)
+model = AutoModelForImageClassification.from_pretrained(model_id)
+
+class_names = model.config.id2label
+
+#initializing the chat history if streamlit session state is not available yet
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+
+
+def preprocess_image(file):
+    """
+    Preprocesses a JPEG or PNG image for model inference.
+
+    Args:
+        file (UploadedFile): A file-like object containing the image (e.g., from Streamlit upload).
+
+    Returns:
+        torch.Tensor: A tensor of shape [1, 3, 224, 224] ready for input to a CNN.
+    """
+    image = Image.open(file).convert("RGB")
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor()
+    ])
+    return transform(image).unsqueeze(0)
+
+def dummy_cnn_output():
+    return """
+    ✅ Image received and processed.
+    
+    🧠 AI Analysis (placeholder):
+    - No visible abnormalities.
+    - Good contrast and resolution.
+    - Ready for further diagnostic evaluation.
+    """
+
 
 
 #just initilizing the function for now for the button ---code to be added here later
@@ -50,8 +91,33 @@ with col1:
     """,
     unsafe_allow_html=True
 )
+def run_inference(image_file):
+    """
+    Performs inference on a single medical image using a ViT-based model.
 
+    Args:
+        image_file: Path to the image file.
 
+    Returns:
+        tuple: (predicted_class, class_probs) where predicted_class is the label index (int),
+               and class_probs is a list of softmax probabilities for each class.
+    """
+
+    image = Image.open(image_file).convert("RGB")
+
+    # Preprocess the image
+    inputs = processor(images=image, return_tensors="pt")
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+        logits = outputs.logits
+        probs = torch.nn.functional.softmax(logits, dim=1).squeeze()
+
+        predicted_class_index = probs.argmax().item()
+
+        predicted_class_name = class_names[predicted_class_index]
+
+    return predicted_class_name
 
 # with col2:
 #         st.write('')
@@ -63,9 +129,18 @@ with col1:
 #                         generate_report()
 #                 st.success("Done! You can now download your report.")
 
+# initial assistant GREETING
+greeting = """
+*Please describe your Symptoms or upload an Image so I can assist you with an AI-powered analysis*"""
+
+# st.session_state.chat_history.append({"role": "assistant", "content": greeting})
+with st.chat_message('assistant'):
+    st.markdown(greeting)
+
 for message in st.session_state.chat_history:
     with st.chat_message(message['role']):
         st.markdown(message['content'])
+
 
 #input field for user message
 user_prompt = st.chat_input(
@@ -117,7 +192,35 @@ or it becomes clear there's no new info to gather.
     if user_files:
         for file in user_files:
             # Save file or process it with CNN here
-            st.chat_message("user").markdown(f"🖼️ Uploaded image: `{file.name}`")
+            st.chat_message("user").markdown(f"Uploaded image: `{file.name}`")
             # Optional: preview
             st.image(file)
             # Steps to be added to pass the image to CNN:Resnet-50
+            with st.spinner('Analysing image....'):
+                result = run_inference(file)
+        # st.chat_message('assistant').markdown(result)
+        
+        image_prompt = f"""The AI image classifier detected the condition as **{result}**.
+
+As DiagnoAI, explain in simple language what this condition means. Then continue with your usual symptom triage — ask the patient for symptoms, duration, severity, etc., like you normally do.
+
+Avoid giving medical advice or diagnosis. Only collect structured information a doctor can use later.
+"""
+
+            # Compose message list
+        image_chat = [
+            {"role": "system", 
+            "content": """You are named DiagnoAI trained in patient triage.
+You explain results like to a human with compassion and ask structured questions about symptoms. Collect relevant details."""},
+            {"role": "user", "content": image_prompt}
+        ]
+
+        image_response = client.chat.completions.create(
+            model='llama-3.1-8b-instant',
+            messages=image_chat
+        )
+
+        followup = image_response.choices[0].message.content
+        st.session_state.chat_history.append({"role": "assistant", "content": followup})
+        with st.chat_message('assistant'):
+            st.markdown(followup)

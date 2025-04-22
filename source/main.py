@@ -34,11 +34,13 @@ client = Groq()
 
 model_id = 'Salesforce/blip-image-captioning-base'
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 model = BlipForConditionalGeneration.from_pretrained(model_id)
+model.to(device)
 
 processor = BlipProcessor.from_pretrained(model_id, use_fast = True)
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
 #initializing the chat history if streamlit session state is not available yet
 if "chat_history" not in st.session_state:

@@ -2,15 +2,18 @@ import os
 import json
 import torch
 from x_ray_prompt import prompts
+import numpy as np
 
 import streamlit as st
 from groq import Groq
 from PIL import Image
 import torchvision.transforms as transforms
 
-from transformers import AutoImageProcessor, AutoModelForImageClassification
+from transformers import BlipProcessor, BlipForConditionalGeneration
 
 #streamlit page configuration
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 st.set_page_config(
         page_title = 'DiagnoAI',
@@ -29,46 +32,17 @@ os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 
 client = Groq()
 
-model_id = 'khengkok/vit-medical'
+model_id = 'Salesforce/blip-image-captioning-base'
 
-processor = AutoImageProcessor.from_pretrained(model_id)
-model = AutoModelForImageClassification.from_pretrained(model_id)
+model = BlipForConditionalGeneration.from_pretrained(model_id)
 
-class_names = model.config.id2label
+processor = BlipProcessor.from_pretrained(model_id, use_fast = True)
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 #initializing the chat history if streamlit session state is not available yet
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-
-
-def preprocess_image(file):
-    """
-    Preprocesses a JPEG or PNG image for model inference.
-
-    Args:
-        file (UploadedFile): A file-like object containing the image (e.g., from Streamlit upload).
-
-    Returns:
-        torch.Tensor: A tensor of shape [1, 3, 224, 224] ready for input to a CNN.
-    """
-    image = Image.open(file).convert("RGB")
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor()
-    ])
-    return transform(image).unsqueeze(0)
-
-def dummy_cnn_output():
-    return """
-    ✅ Image received and processed.
-    
-    🧠 AI Analysis (placeholder):
-    - No visible abnormalities.
-    - Good contrast and resolution.
-    - Ready for further diagnostic evaluation.
-    """
-
-
 
 #just initilizing the function for now for the button ---code to be added here later
 def generate_report():
@@ -91,33 +65,47 @@ with col1:
     """,
     unsafe_allow_html=True
 )
+
 def run_inference(image_file):
     """
-    Performs inference on a single medical image using a ViT-based model.
+    Analyzes an input image using a vision-language model to assess whether 
+    the visual condition appears medically serious or self-resolving.
 
-    Args:
-        image_file: Path to the image file.
+    This function takes a user-uploaded image (e.g., of a wound, rash, or injury),
+    passes it through a BLIP or similar image captioning model along with a 
+    triage-style prompt, and returns a natural language response suggesting whether 
+    medical attention might be necessary.
+
+    Parameters:
+        image_file (str or file-like object): Path to the image file or 
+            a file object representing the image to be analyzed.
 
     Returns:
-        tuple: (predicted_class, class_probs) where predicted_class is the label index (int),
-               and class_probs is a list of softmax probabilities for each class.
+        str: The model's textual response evaluating the condition in the image.
+            Typically includes recommendations like whether to visit a doctor.
+
+    Example:
+        >>> response = run_inference("rash_photo.jpg")
+        >>> print(response)
+        "This appears to be a minor skin irritation and may heal on its own, 
+        but if symptoms worsen, consult a doctor."
     """
-
     image = Image.open(image_file).convert("RGB")
-
-    # Preprocess the image
-    inputs = processor(images=image, return_tensors="pt")
+    
+    prompt = (
+        "Describe the condition shown in this image. "
+        "Does this look medically serious, or is it something that will heal on its own? "
+        "Should the person visit a doctor?"
+    )
+    inputs = processor(text=prompt, images=image, return_tensors="pt").to(model.device)
 
     with torch.no_grad():
-        outputs = model(**inputs)
-        logits = outputs.logits
-        probs = torch.nn.functional.softmax(logits, dim=1).squeeze()
+        output = model.generate(**inputs, max_new_tokens=50)
 
-        predicted_class_index = probs.argmax().item()
+    answer = processor.decode(output[0], skip_special_tokens = True)
+    # print(answer)
+    return answer
 
-        predicted_class_name = class_names[predicted_class_index]
-
-    return predicted_class_name
 
 # with col2:
 #         st.write('')
@@ -202,7 +190,7 @@ or it becomes clear there's no new info to gather.
         
         image_prompt = f"""The AI image classifier detected the condition as **{result}**.
 
-As DiagnoAI, explain in simple language what this condition means. Then continue with your usual symptom triage — ask the patient for symptoms, duration, severity, etc., like you normally do.
+As DiagnoAI, explain in simple language what output you received to the user. Then continue with your usual symptom triage — ask the patient for symptoms, duration, severity, etc., like you normally do.
 
 Avoid giving medical advice or diagnosis. Only collect structured information a doctor can use later.
 """

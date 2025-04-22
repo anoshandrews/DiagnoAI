@@ -1,0 +1,9 @@
+Model, Purpose, Why It Didn't Meet Your Needs, Accuracy / Effectiveness
+BioVil-T, Bimodal model fine tuned on Medical Images, Gives outputs in the form of probablities. No processor for it found in the documentation. Tried and failed to run it, Proved to be really good with Radiology reports ans such.
+Finetuned ViT, Classifies images based on urgency in treatment, Outputs were not satisfactory. Giving multiple false outputs in cases, Documentatino did not provide any further details about the traninig data or metrics 
+IanPan/chest-x-ray-basic, Age/gender + lung/heart segmentation, Doesn't classify diseases; only detects anatomy(only best for image segmentatino), ~95% segmentation
+Dragonscypher/rayz_EfficientNet_B0, Multi-label disease classifier, Needs manual setup from GitHub. Only good on X-Rays. Planning to go for a bit more generic kind of model, ~90–95% CheXpert accuracy
+codewithdark/vit-chest-xray, CheXpert-based disease detection, X-ray only. Not providing satisfactory results. Always giving the same output- 'No finding'. Not general purpose, 98.4% validation accuracy
+Idefics2-8b, Image + prompt reasoning, Very large and slow without GPU or API(about 50GB). High reasoning power. slow response
+Salesforce/blip-image-captioning-base, Describes image content, Not triage-oriented. Gives vague captions. Great for descriptions. Not decisions
+BLIP-2, Vision + language reasoning, Better than BLIP but requires setup. More instruction-aware and capable.

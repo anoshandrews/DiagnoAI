@@ -34,10 +34,7 @@ client = Groq()
 
 model_id = 'Salesforce/blip-image-captioning-base'
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 model = BlipForConditionalGeneration.from_pretrained(model_id)
-model.to(device)
 
 processor = BlipProcessor.from_pretrained(model_id, use_fast = True)
 
@@ -99,7 +96,7 @@ def run_inference(image_file):
         "Does this look medically serious, or is it something that will heal on its own? "
         "Should the person visit a doctor?"
     )
-    inputs = processor(text=prompt, images=image, return_tensors="pt").to(model.device)
+    inputs = processor(text=prompt, images=image, return_tensors="pt")
 
     with torch.no_grad():
         output = model.generate(**inputs, max_new_tokens=50)

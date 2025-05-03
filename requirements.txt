@@ -10,3 +10,4 @@ Bio
 datetime
 uuid
 langchain-community
+sentence-transformers

@@ -13,12 +13,14 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.docstore.document import Document
 from transformers import BlipProcessor, BlipForConditionalGeneration
+from sentence_transformers import SentenceTransformer
 
 #streamlit page configuration
 
 report_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-embedding_model = HuggingFaceEmbeddings(model_name = "sentence-transformers/all-MiniLM-L6-v2", model_kwargs = {'device':'cpu'})
+embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+embedding_model = embedding_model.to('cpu')
 
 working_dir = os.path.dirname(os.path.abspath(__file__))
 

@@ -9,5 +9,6 @@ albumentations
 Bio
 datetime
 uuid
+langchaingit 
 langchain-community
 sentence-transformers

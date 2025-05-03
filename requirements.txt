@@ -6,3 +6,7 @@ transformers
 timm
 medclip
 albumentations
+Bio
+datetime
+uuid
+langchain-community

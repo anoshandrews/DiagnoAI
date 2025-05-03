@@ -3,15 +3,29 @@ import json
 import torch
 from x_ray_prompt import prompts
 import numpy as np
+from datetime import datetime 
 
 import streamlit as st
 from groq import Groq
 from PIL import Image
 import torchvision.transforms as transforms
-
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.docstore.document import Document
 from transformers import BlipProcessor, BlipForConditionalGeneration
 
 #streamlit page configuration
+
+report_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+embedding_model = HuggingFaceEmbeddings(model_name = "sentence-transformers/all-MiniLM-L6-v2")
+
+working_dir = os.path.dirname(os.path.abspath(__file__))
+
+vectorstore_path = os.path.join(working_dir,'vectorstore')
+
+vectorstore = FAISS.load_local(vectorstore_path, embeddings = embedding_model, allow_dangerous_deserialization= True)
+
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -21,7 +35,6 @@ st.set_page_config(
         layout = 'centered'
         )
 
-working_dir = os.path.dirname(os.path.abspath(__file__))
 config_data = json.load(open(f"{working_dir}/config.json"))
 
 GROQ_API_KEY = config_data['GROQ_API_KEY']
@@ -43,12 +56,98 @@ processor = BlipProcessor.from_pretrained(model_id, use_fast = True)
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-#just initilizing the function for now for the button ---code to be added here later
+def get_pubmed_docs(query):
+    abstracts = pubmed_api_call(query)
+    docs = [Document(page_content = a) for a in abstracts]
+    return docs
+
+def store_in_vector_db(docs):
+    embeddings = HuggingFaceEmbeddings(model_name = 'all-MiniLM-L6-v2')
+    vectorstore = FAISS.from_documents(docs, embedding = embeddings, allow_dangerous_deserialization = True)
+    vectorstore.save_local(vectorstore_path)
+    return vectorstore
+
+def load_vectorstore():
+    embeddings = HuggingFaceEmbeddings(model_name = 'all-MiniLM-L6-v2')
+    vectorstore = FAISS.load_local(vectorstore_path, embeddings, allow_dangerous_deserialization=True)
+    return vectorstore
+
+def summarize_chat(chat_history):
+        user_inputs = "\n".join([msg["content"] for msg in st.session_state.chat_history if msg["role"] == "user"])
+
+        summary_prompt = f"""Based on the following conversation, sumamrize the user's reported symptoms in the structured format:
+        
+        {user_inputs}
+            
+        Respond with a clear summary of:
+        - Symptom description
+        - Duration
+        - Severity
+        - Triggers
+        - Associated symptoms
+        """
+
+        summary_response = client.chat.completions.create(
+            model = 'llama-3.1-8b-instant',
+            messages = [
+                {"role": "system", "content": "You are a medical assistant summarizing patient symptom inputs."},
+                {"role": "user", "content": summary_prompt}
+            ]
+        )
+        
+        summary = summary_response.choices[0].message.content.strip()
+        return summary
+
+def retrieve_context(summary):
+    vectorstore = load_vectorstore()
+    docs = vectorstore.similarity_search(summary, k = 3)
+    context = "\n\n".join([doc.page_content for doc in docs])
+    return context
+
+def build_report(symptom_summary, medical_context):
+    final_prompt = f""" Generate a medical report using the symptom summary and relevant medical knowledge below.
+    Symptom Summary:
+    {symptom_summary}
+
+    Medical Knowledge:
+    {medical_context}
+
+    Format the report with:
+    - Patient Summary alond with date and time {report_time}
+    - Possible Conditions
+    - Recommendations
+    """
+    report_response = client.chat.completions.create(
+        model = 'llama-3.1-8b-instant',
+        messages = [
+            {"role": "system", "content": "You are a doctor writing a preliminary patient diagnosis report."},
+            {"role": "user", "content": final_prompt}
+        ]
+    )
+    return report_response.choices[0].message.content.strip()
+
+def generate_downloadable_report(content, filename = 'diagnosis_report.txt'):
+    with open(filename, 'w') as f:
+        f.write(content)
+
+    with open(filename, 'rb') as file:
+        st.download_button('Download Report', file, file_name = filename)
+
 def generate_report():
-        pass
+    with st.spinner('Generating report....'):
+        summary = summarize_chat(st.session_state.chat_history)
+
+        context = retrieve_context(summary)
+
+        report = build_report(summary, context)
+
+        generate_downloadable_report(report)
+
+        st.success('Report generated!')
+
 
 # streamlit page title
-col1, col2 = st.columns([4,1])  # Adjust width ratio as needed
+col1, col2 = st.columns([4,2])  # Adjust width ratio as needed
 
 with col1:
     st.markdown(
@@ -106,15 +205,12 @@ def run_inference(image_file):
     return answer
 
 
-# with col2:
-#         st.write('')
-#         st.write('')
-#         st.write('')
-#         st.write('')
-#         if col2.button("Create Report", key = 'report_button'):
-#                 with st.spinner("Generating your diagnosis report..."):
-#                         generate_report()
-#                 st.success("Done! You can now download your report.")
+with col2:
+        st.write('')
+        st.write('')
+        st.write('')
+        if col2.button("Create Report", key = 'report_button'):
+                generate_report()
 
 # initial assistant GREETING
 greeting = """

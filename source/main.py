@@ -1,26 +1,73 @@
 import os
 import json
 import torch
-from x_ray_prompt import prompts
 import numpy as np
 from datetime import datetime 
+import yaml
 
 import streamlit as st
+st.set_page_config(
+        page_title = 'DiagnoAI',
+        page_icon = '⚕️',
+        layout = 'centered'
+        )
+from yaml.loader import SafeLoader
 from groq import Groq
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from io import BytesIO
 from PIL import Image
 import torchvision.transforms as transforms
+import streamlit_authenticator as stauth
+from streamlit_authenticator import Authenticate
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.docstore.document import Document
-from transformers import BlipProcessor, BlipForConditionalGeneration
+# from transformers import BlipProcessor, BlipForConditionalGeneration
 from sentence_transformers import SentenceTransformer
 
-#streamlit page configuration
+
+# #streamlit page configuration
+
+# # Load config
+# current_dir = os.path.dirname(os.path.abspath(__file__))
+# config_path = os.path.join(current_dir, 'config.yaml')
+
+# with open(config_path, 'r') as file:
+#     config = yaml.load(file, Loader=SafeLoader)
+
+# authenticator = stauth.Authenticate(
+#     credentials=config['credentials'],
+#     cookie_name=config['cookie']['name'],
+#     cookie_key=config['cookie']['key'],
+#     cookie_expiry_days=config['cookie']['expiry_days']
+# )
+
+# login_result = authenticator.login('main','Login')
+
+# if login_result:
+#     name, authentication_status, username = login_result
+#     if authentication_status:
+#         st.success(f"Welcome {name}!")
+#         authenticator.logout('Logout', 'sidebar')
+#     elif authentication_status is False:
+#         st.error("Incorrect username or password.")
+#     elif authentication_status is None:
+#         st.warning("Please enter your credentials.")
+# else:
+#     st.warning("Login returned None — check your config.yaml and form key.")
+
 
 report_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-embedding_model = embedding_model.to('cpu')
+
+embedding_model = HuggingFaceEmbeddings(
+    model_name="paraphrase-MiniLM-L3-v2"
+)
+# embedding_model = embedding_model.to('cpu')
 
 working_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,12 +77,6 @@ vectorstore = FAISS.load_local(vectorstore_path, embeddings = embedding_model, a
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-st.set_page_config(
-        page_title = 'DiagnoAI',
-        page_icon = '⚕️',
-        layout = 'centered'
-        )
 
 config_data = json.load(open(f"{working_dir}/config.json"))
 
@@ -47,11 +88,11 @@ os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 
 client = Groq()
 
-model_id = 'Salesforce/blip-image-captioning-base'
+# model_id = 'Salesforce/blip-image-captioning-base'
 
-model = BlipForConditionalGeneration.from_pretrained(model_id)
+# model = BlipForConditionalGeneration.from_pretrained(model_id)
 
-processor = BlipProcessor.from_pretrained(model_id, use_fast = True)
+# processor = BlipProcessor.from_pretrained(model_id, use_fast = True)
 
 
 #initializing the chat history if streamlit session state is not available yet
@@ -128,12 +169,35 @@ def build_report(symptom_summary, medical_context):
     )
     return report_response.choices[0].message.content.strip()
 
-def generate_downloadable_report(content, filename = 'diagnosis_report.txt'):
-    with open(filename, 'w') as f:
-        f.write(content)
 
-    with open(filename, 'rb') as file:
-        st.download_button('Download Report', file, file_name = filename)
+def generate_downloadable_report(content, filename='diagnosis_report.pdf'):
+    # Create a buffer to hold the PDF data
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            rightMargin=72, leftMargin=72,
+                            topMargin=72, bottomMargin=72)
+    
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Process lines for bold formatting
+    for line in content.split('\n'):
+        while '**' in line:
+            line = line.replace('**', '<b>', 1).replace('**', '</b>', 1)
+        para = Paragraph(line, styles["Normal"])
+        story.append(para)
+        story.append(Spacer(1, 0.08 * inch))
+
+    doc.build(story)
+    buffer.seek(0)
+
+    # Streamlit download button
+    st.download_button(
+        label="Download Report",
+        data=buffer,
+        file_name=filename,
+        mime="application/pdf"
+    )
 
 def generate_report():
     with st.spinner('Generating report....'):
@@ -158,7 +222,7 @@ with col1:
         background: linear-gradient(to right, #FF3C38, #FFB347);
         -webkit-background-clip: text;
         color: transparent;
-        font-size: 4rem;
+        font-size: 5rem;
         text-align: center;
         padding-bottom: 0.5em;
     '>⚕️DiagnoAI</h1>
@@ -166,45 +230,45 @@ with col1:
     unsafe_allow_html=True
 )
 
-def run_inference(image_file):
-    """
-    Analyzes an input image using a vision-language model to assess whether 
-    the visual condition appears medically serious or self-resolving.
+# def run_inference(image_file):
+#     """
+#     Analyzes an input image using a vision-language model to assess whether 
+#     the visual condition appears medically serious or self-resolving.
 
-    This function takes a user-uploaded image (e.g., of a wound, rash, or injury),
-    passes it through a BLIP or similar image captioning model along with a 
-    triage-style prompt, and returns a natural language response suggesting whether 
-    medical attention might be necessary.
+#     This function takes a user-uploaded image (e.g., of a wound, rash, or injury),
+#     passes it through a BLIP or similar image captioning model along with a 
+#     triage-style prompt, and returns a natural language response suggesting whether 
+#     medical attention might be necessary.
 
-    Parameters:
-        image_file (str or file-like object): Path to the image file or 
-            a file object representing the image to be analyzed.
+#     Parameters:
+#         image_file (str or file-like object): Path to the image file or 
+#             a file object representing the image to be analyzed.
 
-    Returns:
-        str: The model's textual response evaluating the condition in the image.
-            Typically includes recommendations like whether to visit a doctor.
+#     Returns:
+#         str: The model's textual response evaluating the condition in the image.
+#             Typically includes recommendations like whether to visit a doctor.
 
-    Example:
-        >>> response = run_inference("rash_photo.jpg")
-        >>> print(response)
-        "This appears to be a minor skin irritation and may heal on its own, 
-        but if symptoms worsen, consult a doctor."
-    """
-    image = Image.open(image_file).convert("RGB")
+#     Example:
+#         >>> response = run_inference("rash_photo.jpg")
+#         >>> print(response)
+#         "This appears to be a minor skin irritation and may heal on its own, 
+#         but if symptoms worsen, consult a doctor."
+#     """
+#     image = Image.open(image_file).convert("RGB")
     
-    prompt = (
-        "Describe the condition shown in this image. "
-        "Does this look medically serious, or is it something that will heal on its own? "
-        "Should the person visit a doctor?"
-    )
-    inputs = processor(text=prompt, images=image, return_tensors="pt")
+#     prompt = (
+#         "Describe the condition shown in this image. "
+#         "Does this look medically serious, or is it something that will heal on its own? "
+#         "Should the person visit a doctor?"
+#     )
+#     inputs = processor(text=prompt, images=image, return_tensors="pt")
 
-    with torch.no_grad():
-        output = model.generate(**inputs, max_new_tokens=50)
+#     with torch.no_grad():
+#         output = model.generate(**inputs, max_new_tokens=50)
 
-    answer = processor.decode(output[0], skip_special_tokens = True)
-    # print(answer)
-    return answer
+#     answer = processor.decode(output[0], skip_special_tokens = True)
+#     # print(answer)
+#     return answer
 
 
 with col2:
@@ -282,7 +346,7 @@ or it becomes clear there's no new info to gather.
             st.image(file)
             # Steps to be added to pass the image to CNN:Resnet-50
             with st.spinner('Analysing image....'):
-                result = run_inference(file)
+                result = 'The image analysis has been disabled for now to work with normal streamlit deployment'
         # st.chat_message('assistant').markdown(result)
         
         image_prompt = f"""The AI image classifier detected the condition as **{result}**.

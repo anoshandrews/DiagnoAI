@@ -21,8 +21,8 @@ from reportlab.lib.units import inch
 from io import BytesIO
 from PIL import Image
 import torchvision.transforms as transforms
-import streamlit_authenticator as stauth
-from streamlit_authenticator import Authenticate
+# import streamlit_authenticator as stauth
+# from streamlit_authenticator import Authenticate
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.docstore.document import Document

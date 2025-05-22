@@ -222,7 +222,7 @@ with col1:
         background: linear-gradient(to right, #FF3C38, #FFB347);
         -webkit-background-clip: text;
         color: transparent;
-        font-size: 5rem;
+        font-size: 4rem;
         text-align: center;
         padding-bottom: 0.5em;
     '>⚕️DiagnoAI</h1>
